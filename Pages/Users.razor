@@ -1,0 +1,134 @@
+﻿@page "/Users"
+
+@using BugTracker.Shared.Models
+@inject BugTracker.Data.BugTrackerContext _context
+
+<PageTitle>Users</PageTitle>
+<h1>Users</h1>
+
+<p>Click the plus button to add a new user or select a user to edit</p>
+
+<input type="button" value="+" @onclick="() => AddUser()" />
+
+<table class="table" style="max-width:600px;margin-top:20px">
+
+    <tr>
+        <th scope="col">
+            ID
+        </th>
+        <th scope="col">
+            Name
+        </th>
+    </tr>
+
+    @foreach (User user in _context.Users)
+    {
+        <tr @onclick="() => EditUser(user)" class="user">
+            <td>
+                @user.Id
+            </td>
+            <td>
+               @user.Name
+            </td>
+        </tr>
+    }
+
+</table>
+
+@if (_showEditModal)
+{
+    <div class="modal" tabindex="-1" style="display:block" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">Edit User</h3>
+                    <button type="button" class="close" @onclick="() => CloseEditModal()">
+                        <span aria-hidden="true">X</span>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+
+                    Full Name:
+                    <input @bind="_editingUser.Name" type="text"/>
+
+                    <input type="button" value="Save" @onclick="() => SaveUserEdit()" />
+                    <input type="button" value="Delete" @onclick="() => DeleteUser()" />
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _showEditModal = false;
+    private User _editingUser;
+
+    private async void DeleteUser()
+    {
+        try
+        {
+            //Unassign user from any bugs
+            foreach (var bug in _context.Bugs.Where(b => b.AssignedUserId == _editingUser.Id))
+            {
+                bug.AssignedUserId = null;
+            }
+
+            //Remove and save
+            _context.Users.Remove(_editingUser);
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            base.StateHasChanged();
+        }
+        base.StateHasChanged();
+        CloseEditModal();
+    }
+
+    private void EditUser(User userToEdit)
+    {
+        _editingUser = userToEdit;
+        _showEditModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        _showEditModal = false;
+    }
+
+    private async void SaveUserEdit()
+    {
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            base.StateHasChanged();
+        }
+        base.StateHasChanged();
+    }
+
+    private async void AddUser()
+    {
+        User newUser = new User()
+        {
+            Name = "New User",
+        };
+
+        _editingUser = newUser;
+        _showEditModal = true;
+
+        try
+        {
+            _context.Users.Add(newUser);
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            base.StateHasChanged();
+        }
+        base.StateHasChanged();
+    }
+}

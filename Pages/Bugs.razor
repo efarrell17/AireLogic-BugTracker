@@ -1,0 +1,215 @@
+﻿@page "/"
+
+@using BugTracker.Shared.Models
+@inject BugTracker.Data.BugTrackerContext _context
+
+<PageTitle>Bugs</PageTitle>
+<h1>Bugs</h1>
+
+<p>Click the plus button to add a new bug or select a bug to edit</p>
+
+<input type="button" value="+" @onclick="() => AddBug()" />
+
+
+<table class="table" style="margin-top:20px">
+    <tr>
+        <th scope="col" style="width:33%">
+            Requested
+        </th>
+        <th scope="col" style="width:33%">
+            In Progress
+        </th>
+        <th scope="col" style="width:33%">
+            Completed
+        </th>
+    </tr>
+
+    @for (int rowCount = 0; rowCount < MaxRows; rowCount++)
+    {
+        <tr>
+                @foreach (var state in Enum.GetValues<Bug.BugState>())
+                {
+                        @if (_context.Bugs.Where(b => b.State == state).ToList().Count > rowCount)
+                        {
+                            Bug bug = _context.Bugs.Where(b => b.State == state).ToList()[rowCount];
+
+                            <td @onclick="() => EditBug(bug)">
+                                <div class="bug">
+                                    @(bug.Id + ": " + bug.Title)
+                                    <br />
+                                    @("Created: " + bug.CreatedDate)
+
+                                    <br />
+                                    @if (bug.AssignedUserId != null)
+                                    {
+                                        @("User: " + _context.Users.First(u => u.Id == bug.AssignedUserId).Name)
+                                    }
+                                    else
+                                    {
+                                        @("User: Unassigned")
+                                    }
+                                </div>
+                            </td>
+
+                        }
+                        else
+                        {
+                             <td>   
+                            </td>
+                        }
+                }
+        </tr>
+    }
+
+
+
+</table>
+
+@if (_showEditBugModal)
+{
+    <div class="modal" tabindex="-1" style="display:block" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">Edit Bug</h3>
+                    <button type="button" class="close" @onclick="() => CloseEditModal()">
+                        <span aria-hidden="true">X</span>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <EditForm EditContext="@editContext">
+
+                    <p>
+                        <input @bind="_editingBug.Title" type="text" />
+                        @(" Created: " + _editingBug.CreatedDate)
+                    </p>
+
+                    <p>
+                        Description:
+                    <textarea style="width:100%;height:60px" @bind="_editingBug.Description" type="text" />
+                    </p>
+
+
+                    <p>
+                        State:
+                        <InputSelect ValueExpression="@(()=>_editingBug.State)" Value="@_editingBug.State" ValueChanged="@((Bug.BugState value) => OnBugStateChange(value))" class="form-select">
+                            @foreach (var value in Enum.GetValues<Bug.BugState>())
+                            {
+                                <option value="@value">@value</option>
+                            }
+                        </InputSelect>
+                    </p>
+
+                    <p>
+                        Assigned User:
+                            <InputSelect ValueExpression="@(()=>_editingBug.AssignedUserId)" Value="@_editingBug.AssignedUserId" ValueChanged="@((int? id) => OnBugUserChange(id))" class="form-select">
+                            <option value="">Unassigned</option>
+                            @foreach (var user in _context.Users.ToList())
+                            {
+                                    <option value="@user.Id">@user.Name</option>
+                            }
+                        </InputSelect>
+                    </p>
+
+
+                    </EditForm>
+                    <input type="button" value="Delete" @onclick="() => DeleteBug()" />
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+@code {
+    EditContext editContext;
+    private bool _showEditBugModal = false;
+    private Bug _editingBug;
+
+    // Max number of rows the table will have
+    // Which is the max bug count in a specific bug state
+    private int MaxRows
+    {
+        get
+        {
+            var BugsRequestedCount = _context.Bugs.Where(b => b.State == Bug.BugState.Requested).ToList().Count;
+            var BugsInProgressCount = _context.Bugs.Where(b => b.State == Bug.BugState.InProgress).ToList().Count;
+            var BugsClosedCount = _context.Bugs.Where(b => b.State == Bug.BugState.Closed).ToList().Count;
+
+            return Math.Max(Math.Max(BugsRequestedCount, BugsInProgressCount), BugsClosedCount);
+        }
+    }
+
+    private void EditBug(Bug bug)
+    {
+        editContext = new EditContext(bug);
+        _editingBug = bug;
+        _showEditBugModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        _showEditBugModal = false;
+    }
+
+    private void OnBugStateChange(Bug.BugState state)
+    {
+        _editingBug.State = state;
+        SaveBugEdit();
+    }
+
+    private void OnBugUserChange(int? userId)
+    {
+        _editingBug.AssignedUserId = userId;
+        SaveBugEdit();
+    }
+
+    private async void SaveBugEdit()
+    {
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            base.StateHasChanged();
+        }
+        base.StateHasChanged();
+    }
+
+    private async void DeleteBug()
+    {
+        try
+        {
+            _context.Bugs.Remove(_editingBug);
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            base.StateHasChanged();
+        }
+        base.StateHasChanged();
+        CloseEditModal();
+    }
+
+    private async void AddBug()
+    {
+        Bug newBug = new Bug();
+
+        _editingBug = newBug;
+        editContext = new EditContext(newBug);
+        _showEditBugModal = true;
+
+        try
+        {
+            _context.Bugs.Add(newBug);
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            base.StateHasChanged();
+        }
+        base.StateHasChanged();
+    }
+}
